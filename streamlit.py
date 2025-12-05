@@ -229,98 +229,45 @@ with tab3:
 with tab4:
     st.header("Live Webcam Detection")
     
-    # Check if running on Streamlit Cloud
-    is_cloud = os.getenv('STREAMLIT_SERVER_HEADLESS') == 'true'
+    st.warning("⚠️ **Note:** Direct webcam access only works when running locally, not on Streamlit Cloud.")
     
-    if is_cloud:
-        st.warning("⚠️ Webcam is not supported on Streamlit Cloud")
-        st.info("""
-        Webcam detection only works when running locally. 
+    run_webcam = st.checkbox("Start Webcam Detection")
+    
+    FRAME_WINDOW = st.image([])
+    
+    if run_webcam:
+        cap = cv2.VideoCapture(0)
         
-        To use webcam locally:
-        1. Clone the repository
-        2. Install dependencies: `pip install -r requirements.txt`
-        3. Run: `streamlit run streamlit.py`
-        4. Open the Webcam tab
-        """)
-    else:
-        try:
-            from streamlit_webrtc import webrtc_streamer, WebRtcMode, RTCConfiguration
-            import av
-            
-            rtc_configuration = RTCConfiguration(
-                {
-                    "iceServers": [
-                        {"urls": ["stun:stun.l.google.com:19302"]},
-                        {"urls": ["stun:stun1.l.google.com:19302"]},
-                        {"urls": ["stun:stun2.l.google.com:19302"]},
-                        {"urls": ["stun:stun3.l.google.com:19302"]},
-                        {"urls": ["stun:stun4.l.google.com:19302"]},
-                        {"urls": ["stun:stun.stunprotocol.org:3478"]},
-                        {"urls": ["stun:stun.sip.us:3478"]},
-                        # TURN servers for relay (when direct connection fails)
-                        {
-                            "urls": ["turn:openrelay.metered.ca:80"],
-                            "username": "openrelayproject",
-                            "credential": "openrelayproject"
-                        },
-                        {
-                            "urls": ["turn:openrelay.metered.ca:443"],
-                            "username": "openrelayproject",
-                            "credential": "openrelayproject"
-                        },
-                    ]
-                }
-            )
-            
-            class VideoProcessor:
-                def __init__(self):
-                    self.conf = conf_threshold
-                
-                def recv(self, frame):
-                    img = frame.to_ndarray(format="bgr24")
-                    
-                    # Resize frame to reduce latency (416x416 is standard YOLO input)
-                    h, w = img.shape[:2]
-                    target_size = 416
-                    scale = min(target_size / h, target_size / w)
-                    new_h, new_w = int(h * scale), int(w * scale)
-                    img_resized = cv2.resize(img, (new_w, new_h))
-                    
-                    # Run inference on resized frame
-                    results = model(img_resized, conf=self.conf, device=device_id, verbose=False)
-                    annotated_frame = results[0].plot()
-                    
-                    # Resize back to original size for display
-                    annotated_frame = cv2.resize(annotated_frame, (w, h))
-                    
-                    return av.VideoFrame.from_ndarray(annotated_frame, format="bgr24")
-            
-            webrtc_ctx = webrtc_streamer(
-                key="card-classifier-webcam",
-                mode=WebRtcMode.SENDRECV,
-                rtc_configuration=rtc_configuration,
-                media_stream_constraints={"video": {"width": {"ideal": 640}, "height": {"ideal": 480}}, "audio": False},
-                async_processing=True,
-                video_processor_factory=VideoProcessor,
-            )
-            
-            if webrtc_ctx.state.playing:
-                st.info("📹 Webcam is active. Detection running in real-time.")
-            else:
-                st.info("Click 'Start' to begin webcam detection")
-                
-        except ImportError:
-            st.warning("⚠️ streamlit-webrtc not installed")
-            st.info("Install it with: `pip install streamlit-webrtc`")
-            
-            # Fallback: Simple OpenCV approach
-            st.subheader("Alternative: Local Webcam Testing")
-            st.code("""
-# Run this in terminal instead:
-python test.py
-# Then select option 3 for webcam
+        if not cap.isOpened():
+            st.error("❌ Cannot access webcam. Make sure:")
+            st.markdown("""
+            - Your webcam is connected
+            - No other application is using it
+            - You've granted camera permissions
+            - You're running this locally (not on Streamlit Cloud)
             """)
+        else:
+            st.success("✅ Webcam connected!")
+            stop_button = st.button("Stop Webcam")
+            
+            while run_webcam and not stop_button:
+                ret, frame = cap.read()
+                if not ret:
+                    st.error("Failed to capture frame")
+                    break
+                
+                # Run YOLO detection
+                results = model(frame, conf=conf_threshold, device=device_id, verbose=False)
+                annotated_frame = results[0].plot()
+                
+                # Convert BGR to RGB for Streamlit
+                frame_rgb = cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2RGB)
+                
+                # Display frame
+                FRAME_WINDOW.image(frame_rgb)
+            
+            cap.release()
+            st.info("Webcam stopped")
 # Footer
 st.markdown("---")
 st.markdown("""
@@ -328,3 +275,4 @@ st.markdown("""
     <p>🃏 YOLO Card Classifier | Powered by Ultralytics YOLOv11</p>
     </div>
     """, unsafe_allow_html=True)
+
