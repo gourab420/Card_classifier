@@ -47,6 +47,7 @@ def load_model():
 
 model = load_model()
 
+
 if model is None:
     st.stop()
 
@@ -161,7 +162,10 @@ with tab2:
             cap.release()
 
             # Write video using imageio (includes ffmpeg)
-            output_path = "processed_video_output.mp4"
+            output_dir = "temp_outputs"
+            os.makedirs(output_dir, exist_ok=True)
+            output_path = os.path.join(output_dir, "processed_video_output.mp4")
+            
             imageio.mimsave(
                 output_path,
                 processed_frames,
@@ -177,13 +181,14 @@ with tab2:
                 st.video(output_path)
             
             # Download button
+            with col2:
                 with open(output_path, "rb") as f:
                     st.download_button(
-                    label="📥 Download Processed Video",
-                    data=f.read(),
-                    file_name="processed_video.mp4",
-                    mime="video/mp4"
-                )
+                        label="📥 Download Processed Video",
+                        data=f.read(),
+                        file_name="processed_video.mp4",
+                        mime="video/mp4"
+                    )
             
             # Clean up
             os.remove(temp_input.name)
@@ -225,70 +230,85 @@ with tab3:
 with tab4:
     st.header("Live Webcam Detection")
     
-    try:
-        from streamlit_webrtc import webrtc_streamer, WebRtcMode, RTCConfiguration
-        import av
+    # Check if running on Streamlit Cloud
+    is_cloud = os.getenv('STREAMLIT_SERVER_HEADLESS') == 'true'
+    
+    if is_cloud:
+        st.warning("⚠️ Webcam is not supported on Streamlit Cloud")
+        st.info("""
+        Webcam detection only works when running locally. 
         
-        rtc_configuration = RTCConfiguration(
-            {
-                "iceServers": [
-                    {"urls": ["stun:stun.l.google.com:19302"]},
-                    {"urls": ["stun:stun1.l.google.com:19302"]},
-                    {"urls": ["stun:stun2.l.google.com:19302"]},
-                    {"urls": ["stun:stun3.l.google.com:19302"]},
-                    {"urls": ["stun:stun4.l.google.com:19302"]},
-                ]
-            }
-        )
-        
-        class VideoProcessor:
-            def __init__(self):
-                self.conf = conf_threshold
+        To use webcam locally:
+        1. Clone the repository
+        2. Install dependencies: `pip install -r requirements.txt`
+        3. Run: `streamlit run streamlit.py`
+        4. Open the Webcam tab
+        """)
+    else:
+        try:
+            from streamlit_webrtc import webrtc_streamer, WebRtcMode, RTCConfiguration
+            import av
             
-            def recv(self, frame):
-                img = frame.to_ndarray(format="bgr24")
-                
-                # Resize frame to reduce latency (416x416 is standard YOLO input)
-                h, w = img.shape[:2]
-                target_size = 416
-                scale = min(target_size / h, target_size / w)
-                new_h, new_w = int(h * scale), int(w * scale)
-                img_resized = cv2.resize(img, (new_w, new_h))
-                
-                # Run inference on resized frame
-                results = model(img_resized, conf=self.conf, device=device_id, verbose=False)
-                annotated_frame = results[0].plot()
-                
-                # Resize back to original size for display
-                annotated_frame = cv2.resize(annotated_frame, (w, h))
-                
-                return av.VideoFrame.from_ndarray(annotated_frame, format="bgr24")
-        
-        webrtc_ctx = webrtc_streamer(
-            key="card-classifier-webcam",
-            mode=WebRtcMode.SENDRECV,
-            rtc_configuration=rtc_configuration,
-            media_stream_constraints={"video": {"width": {"ideal": 640}, "height": {"ideal": 480}}, "audio": False},
-            async_processing=True,
-            video_processor_factory=VideoProcessor,
-        )
-        
-        if webrtc_ctx.state.playing:
-            st.info("📹 Webcam is active. Detection running in real-time.")
-        else:
-            st.info("Click 'Start' to begin webcam detection")
+            rtc_configuration = RTCConfiguration(
+                {
+                    "iceServers": [
+                        {"urls": ["stun:stun.l.google.com:19302"]},
+                        {"urls": ["stun:stun1.l.google.com:19302"]},
+                        {"urls": ["stun:stun2.l.google.com:19302"]},
+                        {"urls": ["stun:stun3.l.google.com:19302"]},
+                        {"urls": ["stun:stun4.l.google.com:19302"]},
+                    ]
+                }
+            )
             
-    except ImportError:
-        st.warning("⚠️ streamlit-webrtc not installed")
-        st.info("Install it with: `pip install streamlit-webrtc`")
-        
-        # Fallback: Simple OpenCV approach
-        st.subheader("Alternative: Local Webcam Testing")
-        st.code("""
+            class VideoProcessor:
+                def __init__(self):
+                    self.conf = conf_threshold
+                
+                def recv(self, frame):
+                    img = frame.to_ndarray(format="bgr24")
+                    
+                    # Resize frame to reduce latency (416x416 is standard YOLO input)
+                    h, w = img.shape[:2]
+                    target_size = 416
+                    scale = min(target_size / h, target_size / w)
+                    new_h, new_w = int(h * scale), int(w * scale)
+                    img_resized = cv2.resize(img, (new_w, new_h))
+                    
+                    # Run inference on resized frame
+                    results = model(img_resized, conf=self.conf, device=device_id, verbose=False)
+                    annotated_frame = results[0].plot()
+                    
+                    # Resize back to original size for display
+                    annotated_frame = cv2.resize(annotated_frame, (w, h))
+                    
+                    return av.VideoFrame.from_ndarray(annotated_frame, format="bgr24")
+            
+            webrtc_ctx = webrtc_streamer(
+                key="card-classifier-webcam",
+                mode=WebRtcMode.SENDRECV,
+                rtc_configuration=rtc_configuration,
+                media_stream_constraints={"video": {"width": {"ideal": 640}, "height": {"ideal": 480}}, "audio": False},
+                async_processing=True,
+                video_processor_factory=VideoProcessor,
+            )
+            
+            if webrtc_ctx.state.playing:
+                st.info("📹 Webcam is active. Detection running in real-time.")
+            else:
+                st.info("Click 'Start' to begin webcam detection")
+                
+        except ImportError:
+            st.warning("⚠️ streamlit-webrtc not installed")
+            st.info("Install it with: `pip install streamlit-webrtc`")
+            
+            # Fallback: Simple OpenCV approach
+            st.subheader("Alternative: Local Webcam Testing")
+            st.code("""
 # Run this in terminal instead:
 python test.py
 # Then select option 3 for webcam
-        """)
+            """)
 # Footer
 st.markdown("---")
 st.markdown("""
@@ -296,4 +316,3 @@ st.markdown("""
     <p>🃏 YOLO Card Classifier | Powered by Ultralytics YOLOv11</p>
     </div>
     """, unsafe_allow_html=True)
-
