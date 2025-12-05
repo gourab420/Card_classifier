@@ -303,7 +303,6 @@ with tab4:
                 media_stream_constraints={"video": {"width": {"ideal": 640}, "height": {"ideal": 480}}, "audio": False},
                 async_processing=True,
                 video_processor_factory=VideoProcessor,
-                webrtc_connection_state_hold_ms=1000,
             )
             
             if webrtc_ctx.state.playing:
