@@ -37,7 +37,7 @@ st.markdown("---")
 @st.cache_resource
 def load_model():
     # model_path = "runs/detect/train8/weights/best.pt"
-    model_path = 'runs/detect/train2/weights/best.pt'
+    model_path = 'best.pt'
     
     if not os.path.exists(model_path):
         st.error(f"❌ Model not found at {model_path}")
@@ -296,3 +296,4 @@ st.markdown("""
     <p>🃏 YOLO Card Classifier | Powered by Ultralytics YOLOv11</p>
     </div>
     """, unsafe_allow_html=True)
+
