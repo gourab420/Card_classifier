@@ -225,48 +225,77 @@ with tab3:
         else:
             st.error(f"❌ Folder not found: {folder_path}")
 
-# Tab 4: Webcam Alternative
+# Tab 4: Webcam
 with tab4:
     st.header("Live Camera Detection")
     
-    st.info("📸 Use your phone or laptop camera to take pictures for detection")
+    detection_mode = st.radio(
+        "Choose detection mode:",
+        ["📸 Camera Capture (Recommended)", "🎥 Live Webcam (Advanced)"],
+        horizontal=True
+    )
     
-    # Camera input (works on all devices)
-    camera_photo = st.camera_input("Take a photo")
+    if detection_mode == "📸 Camera Capture (Recommended)":
+        st.info("Take photos with your camera for instant detection - works on all devices!")
+        
+        camera_photo = st.camera_input("Take a photo")
+        
+        if camera_photo is not None:
+            image = Image.open(camera_photo)
+            img_array = np.array(image)
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.subheader("📷 Original")
+                st.image(image, use_container_width=True)
+            
+            with col2:
+                st.subheader("🎯 Detection")
+                with st.spinner("Analyzing..."):
+                    results = model.predict(img_array, device=device_id, conf=conf_threshold, verbose=False)
+                    annotated_img = results[0].plot()
+                    annotated_img_rgb = cv2.cvtColor(annotated_img, cv2.COLOR_BGR2RGB)
+                    
+                    st.image(annotated_img_rgb, use_container_width=True)
+                    
+                    if len(results[0].boxes) > 0:
+                        st.success(f"Found {len(results[0].boxes)} object(s):")
+                        for box in results[0].boxes:
+                            cls = int(box.cls[0])
+                            conf = float(box.conf[0])
+                            st.write(f"• **{model.names[cls]}** - {conf:.1%} confidence")
+                    else:
+                        st.info("No objects detected. Try another angle!")
     
-    if camera_photo is not None:
-        # Read image
-        image = Image.open(camera_photo)
-        img_array = np.array(image)
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.subheader("Original")
-            st.image(image, use_container_width=True)
-        
-        with col2:
-            st.subheader("Detection Result")
-            with st.spinner("Detecting..."):
-                # Run detection
-                results = model.predict(img_array, device=device_id, conf=conf_threshold, verbose=False)
-                annotated_img = results[0].plot()
-                annotated_img_rgb = cv2.cvtColor(annotated_img, cv2.COLOR_BGR2RGB)
-                
-                st.image(annotated_img_rgb, use_container_width=True)
-                
-                # Show detections
-                if len(results[0].boxes) > 0:
-                    st.success(f"✅ Detected {len(results[0].boxes)} object(s)")
-                    for box in results[0].boxes:
-                        cls = int(box.cls[0])
-                        conf = float(box.conf[0])
-                        st.write(f"- {model.names[cls]}: {conf:.2%}")
-                else:
-                    st.warning("No objects detected")
-    
-    st.markdown("---")
-    st.caption("💡 Tip: Take a new photo to detect again")
+    else:  # Live Webcam
+        try:
+            from streamlit_webrtc import webrtc_streamer, WebRtcMode, RTCConfiguration
+            import av
+            
+            st.warning("⚠️ Requires good internet connection and modern browser (Chrome/Edge)")
+            
+            rtc_configuration = RTCConfiguration(
+                {"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]}
+            )
+            
+            class VideoProcessor:
+                def recv(self, frame):
+                    img = frame.to_ndarray(format="bgr24")
+                    results = model(img, conf=conf_threshold, device=device_id, verbose=False)
+                    return av.VideoFrame.from_ndarray(results[0].plot(), format="bgr24")
+            
+            webrtc_streamer(
+                key="detection",
+                mode=WebRtcMode.SENDRECV,
+                rtc_configuration=rtc_configuration,
+                media_stream_constraints={"video": True, "audio": False},
+                video_processor_factory=VideoProcessor,
+                async_processing=True,
+            )
+            
+        except ImportError:
+            st.error("Install: `pip install streamlit-webrtc aiortc`")
         
 # Footer
 st.markdown("---")
@@ -275,6 +304,7 @@ st.markdown("""
     <p>🃏 YOLO Card Classifier | Powered by Ultralytics YOLOv11</p>
     </div>
     """, unsafe_allow_html=True)
+
 
 
 
