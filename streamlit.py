@@ -8,7 +8,7 @@ from pathlib import Path
 import tempfile
 import imageio
 
-# Set page config
+#set page config
 st.set_page_config(
     page_title="Card Classifier",
     page_icon="🃏",
@@ -16,7 +16,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS
+#custom CSS
 st.markdown("""
     <style>
     .main {
@@ -29,138 +29,210 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# Title
-st.title("🃏 YOLO Card Classifier")
+#title
+st.title("YOLO Card Classifier")
 st.markdown("---")
 
-# Load model
-@st.cache_resource
+#load the model
+@st.cache_resource #->for faster load model
 def load_model():
-    # model_path = "runs/detect/train8/weights/best.pt"
     model_path = 'best.pt'
-    
     if not os.path.exists(model_path):
-        st.error(f"❌ Model not found at {model_path}")
-        st.info("Please train the model first using: `python card_classifier.py`")
+        st.error(f"Model not found at {model_path}")
+        st.info("train the model first ")
         return None
     return YOLO(model_path)
 
-model = load_model()
+model=load_model() #call the function and store the cache model in model veriable
 
 if model is None:
     st.stop()
 
-# Sidebar
-st.sidebar.title("⚙️ Settings")
-conf_threshold = st.sidebar.slider(
+#sidebar
+st.sidebar.title("Settings")
+conf_threshold = st.sidebar.slider(  #-> make a slide bar that take confidence threshold input from user to revel full potential of the model accuracy
     "Confidence Threshold",
     min_value=0.0,
     max_value=1.0,
     value=0.5,
     step=0.05,
-    help="Lower values detect more objects but with lower confidence"
+    help="lower values detect more objects but with lower confidence (increase false positives)"
 )
 
-# Use CPU for all inference
-device_id = "cpu"
+#use CPU because in local i initially use gpu but when i try to deploy it in cloud then findout in cloud(streamlit.io) it only support cpu not gpu
+device_id="cpu"
 
-# Main tabs
-tab1, tab2, tab3, tab4 = st.tabs(["📷 Image", "🎥 Video", "📁 Folder", "📹 Webcam"])
+#main tabs
+tab1,tab2= st.tabs(["📷 Image", "🎥 Video"])
 
-# Tab 1: Image Upload
+#Tab 1: single to multiple image upload + live take photo using camera
 with tab1:
-    st.header("Test on Image")
-    uploaded_file = st.file_uploader(
-        "Upload an image",
-        type=["jpg", "jpeg", "png", "bmp"],
-        help="Supported formats: JPG, JPEG, PNG, BMP"
+    st.header("Test on Image(s)")
+
+    # =============================
+    # ROW 1 → IMAGE UPLOAD SECTION
+    # =============================
+    st.subheader("📤 Upload Image(s)")
+
+    uploaded_files = st.file_uploader( #-> choose image from local drive 
+        "Upload one or more images",
+        type=["jpg","jpeg","png","bmp"],
+        accept_multiple_files=True,
+        key="upload_img_multiple_tab1"
     )
-    
-    if uploaded_file is not None:
-        # Display uploaded image
-        image = Image.open(uploaded_file)
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.subheader("Original Image")
-            st.image(image, use_column_width=True)
-        
-        # Run inference automatically
-        with st.spinner("Running inference..."):
-            # Convert PIL to numpy array
-            image_np = np.array(image)
-            
-            # Run prediction
-            results = model.predict(
-                source=image_np,
-                conf=conf_threshold,
-                device=device_id,
-                verbose=False
-            )
-            
-            # Get annotated image
-            annotated_image = results[0].plot()
-            annotated_pil = Image.fromarray(annotated_image)
-            
+
+    if uploaded_files:
+        st.info(f"📦 {len(uploaded_files)} file(s) uploaded")
+
+        #loop for all uploaded images to get access one by one
+        for idx, uploaded_file in enumerate(uploaded_files):
+            st.write(f"### 🖼 Image {idx + 1}: {uploaded_file.name}")
+
+            image=Image.open(uploaded_file)#->store single image
+            col1,col2 = st.columns(2)#-> two colum one for orginal image and another for predicted image
+
+            #original image
+            with col1:
+                st.subheader("Original Image")
+                st.image(image,use_column_width=True)
+
+            #detection though the trained model 
+            with st.spinner("Running inference..."):
+                image_np = np.array(image) #->convert the image to numpy array for prediction
+                results = model.predict( #-> run the pretained model for the image
+                    source=image_np, #-> here image source is numpy array not raw image
+                    conf=conf_threshold,
+                    device=device_id,
+                    verbose=False
+                )
+                annotated = results[0].plot() #->detect the object from the image and draw the bounding box 
+                annotated_pil = Image.fromarray(annotated) #->convert anoteated numpy array to real image
+
+            #predicted image
             with col2:
-                st.subheader("Detection Results")
+                st.subheader("Detection Result")
                 st.image(annotated_pil, use_column_width=True)
-            
-            # Display detections
-            st.subheader("📊 Detections")
+
+            #show detection table
+            st.subheader("📊 Detections") #-> show the value get from the images
             if len(results[0].boxes) > 0:
-                detections_data = []
-                for box in results[0].boxes:
-                    class_id = int(box.cls[0])
-                    class_name = results[0].names[class_id]
-                    confidence = float(box.conf[0])
-                    detections_data.append({
-                        "Class": class_name,
-                        "Confidence": f"{confidence:.2%}",
-                        "Box": f"({int(box.xyxy[0][0])}, {int(box.xyxy[0][1])}, {int(box.xyxy[0][2])}, {int(box.xyxy[0][3])})"
+                det_list = []
+                for box in results[0].boxes: 
+                    cls = int(box.cls[0]) #->get the class id(heart,dimond etc) from the predicted image
+                    conf = float(box.conf[0]) #->get the confidence score
+                    det_list.append({
+                        "Class": results[0].names[cls],
+                        "Confidence": f"{conf:.2%}",
+                        "Box": f"({int(box.xyxy[0][0])}, {int(box.xyxy[0][1])}," #->get the actual 4 points(coordinates) of the bounding box
+                               f"{int(box.xyxy[0][2])}, {int(box.xyxy[0][3])})"
                     })
-                st.dataframe(detections_data, use_container_width=True)
+                st.dataframe(det_list,use_container_width=True)#-> display the detected object in a table
+                
+            else:#-> if detection box less than 1 then the image does not contain any detected object
+                st.info("No objects detected")
+            st.write("---")
+
+    st.write("")
+
+    # ROW 2 → LIVE CAMERA SECTION
+    st.subheader("📸 Live Camera Detection")
+
+    #camera session state
+    if "cam_active" not in st.session_state:
+        st.session_state.cam_active = False
+
+    #start/stop buttons for camera
+    colA,colB = st.columns(2) #-> in column-1 start button and column-2 stop button
+    with colA:
+        if st.button("▶️ Start Camera", key="start_cam_button_tab1"):
+            st.session_state.cam_active = True
+
+    with colB:
+        if st.button("⛔ Stop Camera", key="stop_cam_button_tab1"):
+            st.session_state.cam_active = False
+
+    st.write("")
+
+    #show camera if active or already granted the permission
+    if st.session_state.cam_active:
+        camera_photo = st.camera_input("Take a photo", key="live_cam_input_tab1") #-> take photo from the user
+
+        if camera_photo is not None:
+            image = Image.open(camera_photo)
+            
+            '''same as row-1 the main difference is in the row-1 user give image from local stroage and here user
+               give the input though the camera'''
+               
+            img_array = np.array(image)
+            col1, col2 = st.columns(2)
+            #show original live image
+            with col1:
+                st.subheader("Original (Live Photo)")
+                st.image(image, use_column_width=True)
+
+            #detection though the trained model 
+            with col2:
+                st.subheader("Detection Result")
+                with st.spinner("Detecting..."):
+                    results = model.predict(
+                        img_array,
+                        device=device_id,
+                        conf=conf_threshold,
+                        verbose=False
+                    )
+                    annotated_img = results[0].plot()
+                    annotated_pil_img = Image.fromarray(annotated_img)
+                    st.image(annotated_pil_img, use_column_width=True)
+
+            #show detection list
+            st.subheader("📊 Live Camera Detections")
+            if len(results[0].boxes) > 0:
+                for box in results[0].boxes:
+                    cls = int(box.cls[0])
+                    conf = float(box.conf[0])
+                    st.write(f"- {model.names[cls]} → {conf:.2%}")
             else:
                 st.info("No objects detected")
+    else:
+        st.warning("Live Camera is Off. Click **Start Camera** to begin.")
 
-# Tab 2: Video Upload
 
+#Tab 2: Video Upload
 with tab2:
     st.header("Test on Video")
-    video_file = st.file_uploader(
+    video_file = st.file_uploader( #-> upload video from local stroage
         "Upload a video",
         type=["mp4", "avi", "mov", "mkv"]
     )
 
     if video_file is not None:
-        st.video(video_file)
+        st.video(video_file) #-> display the orginal video which is uploaded
 
         with st.spinner("Processing video..."):
-            # Save uploaded video temporarily
+            #save uploaded video temporarily
             temp_input = tempfile.NamedTemporaryFile(delete=False, suffix=".mp4")
             temp_input.write(video_file.getbuffer())
             temp_input.close()
 
-            # Read input video
-            cap = cv2.VideoCapture(temp_input.name)
-            fps = cap.get(cv2.CAP_PROP_FPS)
+            #read the input video
+            cap = cv2.VideoCapture(temp_input.name) #create a videocapture object to read frames from the video file 
+            fps = cap.get(cv2.CAP_PROP_FPS) #get the frame per secound of the uploaded video
 
-            # Collect processed frames
-            processed_frames = []
+            #collect processed frames
+            processed_frames=[]
             
             while True:
-                ret, frame = cap.read()
+                ret,frame = cap.read()
                 if not ret:
                     break
-                results = model.predict(frame, device=device_id, conf=conf_threshold, verbose=False)
-                processed_frame = results[0].plot()
-                # Convert BGR to RGB for imageio
-                processed_frame_rgb = cv2.cvtColor(processed_frame, cv2.COLOR_BGR2RGB)
-                processed_frames.append(processed_frame_rgb)
+                results = model.predict(frame, device=device_id, conf=conf_threshold, verbose=False) #->run the model on current frame
+                processed_frame = results[0].plot()#draw the bounding box and lebel
+                processed_frame_rgb = cv2.cvtColor(processed_frame, cv2.COLOR_BGR2RGB)#->convert BGR to RGB for proper display
+                processed_frames.append(processed_frame_rgb)#->add processed frame to the list
 
-            cap.release()
+            cap.release() #release the video captur object
 
-            # Write video using imageio (includes ffmpeg)
+            #save processed frames as a new video using imageio
             output_dir = "temp_outputs"
             os.makedirs(output_dir, exist_ok=True)
             output_path = os.path.join(output_dir, "processed_video_output.mp4")
@@ -168,18 +240,18 @@ with tab2:
             imageio.mimsave(
                 output_path,
                 processed_frames,
-                fps=fps,
+                fps=fps,           #->keep same orginal video fps
                 codec='libx264',
                 pixelformat='yuv420p'
             )
-
+            #display the predicted video
             st.subheader("🎬 Processed Video")
             col1, col2, col3 = st.columns([1, 2, 1])
  
             with col2:
                 st.video(output_path)
             
-            # Download button
+            #download button for new predicted video
             with col2:
                 with open(output_path, "rb") as f:
                     st.download_button(
@@ -189,114 +261,10 @@ with tab2:
                         mime="video/mp4"
                     )
             
-            # Clean up
+            #clean up
             os.remove(temp_input.name)
-
-
-
-# Tab 3: Folder of Images
-
-with tab3:
-    st.header("Test on Folder")
-    folder_path = st.text_input(
-        "Enter folder path",
-        value="roboflow_dataset/test/images",
-        help="Path to folder containing images"
-    )
-    
-    if st.button("🔍 Run Detection on Folder", key="folder_detect"):
-        if os.path.isdir(folder_path):
-            with st.spinner("Processing folder... This may take a while"):
-                # Run prediction
-                results = model.predict(
-                    source=folder_path,
-                    conf=conf_threshold,
-                    save=True,
-                    device=device_id,
-                    verbose=False
-                )
-                
-                st.success(f"✅ Processed {len(results)} images!")
-                st.info("Results saved to `runs/detect/predict`")
-                
-                # Display summary
-                total_detections = sum(len(r.boxes) for r in results)
-                st.metric("Total Detections", total_detections)
-        else:
-            st.error(f"❌ Folder not found: {folder_path}")
-
-# Tab 4: Webcam
-with tab4:
-    st.header("Live Camera Detection")
-    
-    detection_mode = st.radio(
-        "Choose detection mode:",
-        ["📸 Camera Capture (Recommended)", "🎥 Live Webcam (Advanced)"],
-        horizontal=True
-    )
-    
-    if detection_mode == "📸 Camera Capture (Recommended)":
-        st.info("Take photos with your camera for instant detection - works on all devices!")
-        
-        camera_photo = st.camera_input("Take a photo")
-        
-        if camera_photo is not None:
-            image = Image.open(camera_photo)
-            img_array = np.array(image)
             
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                st.subheader("📷 Original")
-                st.image(image, use_container_width=True)
-            
-            with col2:
-                st.subheader("🎯 Detection")
-                with st.spinner("Analyzing..."):
-                    results = model.predict(img_array, device=device_id, conf=conf_threshold, verbose=False)
-                    annotated_img = results[0].plot()
-                    annotated_img_rgb = cv2.cvtColor(annotated_img, cv2.COLOR_BGR2RGB)
-                    
-                    st.image(annotated_img_rgb, use_container_width=True)
-                    
-                    if len(results[0].boxes) > 0:
-                        st.success(f"Found {len(results[0].boxes)} object(s):")
-                        for box in results[0].boxes:
-                            cls = int(box.cls[0])
-                            conf = float(box.conf[0])
-                            st.write(f"• **{model.names[cls]}** - {conf:.1%} confidence")
-                    else:
-                        st.info("No objects detected. Try another angle!")
-    
-    else:  # Live Webcam
-        try:
-            from streamlit_webrtc import webrtc_streamer, WebRtcMode, RTCConfiguration
-            import av
-            
-            st.warning("⚠️ Requires good internet connection and modern browser (Chrome/Edge)")
-            
-            rtc_configuration = RTCConfiguration(
-                {"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]}
-            )
-            
-            class VideoProcessor:
-                def recv(self, frame):
-                    img = frame.to_ndarray(format="bgr24")
-                    results = model(img, conf=conf_threshold, device=device_id, verbose=False)
-                    return av.VideoFrame.from_ndarray(results[0].plot(), format="bgr24")
-            
-            webrtc_streamer(
-                key="detection",
-                mode=WebRtcMode.SENDRECV,
-                rtc_configuration=rtc_configuration,
-                media_stream_constraints={"video": True, "audio": False},
-                video_processor_factory=VideoProcessor,
-                async_processing=True,
-            )
-            
-        except ImportError:
-            st.error("Install: `pip install streamlit-webrtc aiortc`")
-        
+   
 # Footer
 st.markdown("---")
 st.markdown("""
@@ -304,6 +272,7 @@ st.markdown("""
     <p>🃏 YOLO Card Classifier | Powered by Ultralytics YOLOv11</p>
     </div>
     """, unsafe_allow_html=True)
+
 
 
 
