@@ -5,7 +5,15 @@ torchaudio
 ultralytics
 
 numpy
+pandas
 pillow
+
 streamlit
 streamlit-webrtc
-opencv-python-headless
+
+opencv-python-headless>=4.11.0
+
+matplotlib
+scikit-learn
+pyyaml
+scipy
