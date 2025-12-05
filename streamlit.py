@@ -47,7 +47,6 @@ def load_model():
 
 model = load_model()
 
-
 if model is None:
     st.stop()
 
@@ -257,6 +256,19 @@ with tab4:
                         {"urls": ["stun:stun2.l.google.com:19302"]},
                         {"urls": ["stun:stun3.l.google.com:19302"]},
                         {"urls": ["stun:stun4.l.google.com:19302"]},
+                        {"urls": ["stun:stun.stunprotocol.org:3478"]},
+                        {"urls": ["stun:stun.sip.us:3478"]},
+                        # TURN servers for relay (when direct connection fails)
+                        {
+                            "urls": ["turn:openrelay.metered.ca:80"],
+                            "username": "openrelayproject",
+                            "credential": "openrelayproject"
+                        },
+                        {
+                            "urls": ["turn:openrelay.metered.ca:443"],
+                            "username": "openrelayproject",
+                            "credential": "openrelayproject"
+                        },
                     ]
                 }
             )
@@ -291,6 +303,7 @@ with tab4:
                 media_stream_constraints={"video": {"width": {"ideal": 640}, "height": {"ideal": 480}}, "audio": False},
                 async_processing=True,
                 video_processor_factory=VideoProcessor,
+                webrtc_connection_state_hold_ms=1000,
             )
             
             if webrtc_ctx.state.playing:
