@@ -225,49 +225,64 @@ with tab3:
         else:
             st.error(f"❌ Folder not found: {folder_path}")
 
-# Tab 4: Webcam
 with tab4:
     st.header("Live Webcam Detection")
     
-    st.warning("⚠️ **Note:** Direct webcam access only works when running locally, not on Streamlit Cloud.")
-    
-    run_webcam = st.checkbox("Start Webcam Detection")
-    
-    FRAME_WINDOW = st.image([])
-    
-    if run_webcam:
-        cap = cv2.VideoCapture(0)
+    try:
+        from streamlit_webrtc import webrtc_streamer, WebRtcMode, RTCConfiguration
+        import av
         
-        if not cap.isOpened():
-            st.error("❌ Cannot access webcam. Make sure:")
-            st.markdown("""
-            - Your webcam is connected
-            - No other application is using it
-            - You've granted camera permissions
-            - You're running this locally (not on Streamlit Cloud)
-            """)
-        else:
-            st.success("✅ Webcam connected!")
-            stop_button = st.button("Stop Webcam")
+        st.info("📹 **Instructions:**")
+        st.markdown("""
+        1. Click **START** below
+        2. Allow camera access when prompted by your browser
+        3. Wait 5-10 seconds for connection
+        4. Use **Chrome** or **Edge** for best results
+        """)
+        
+        # Simplified RTC Configuration
+        rtc_configuration = RTCConfiguration(
+            {
+                "iceServers": [
+                    {"urls": ["stun:stun.l.google.com:19302"]},
+                ]
+            }
+        )
+        
+        class VideoProcessor:
+            def __init__(self):
+                self.conf = conf_threshold
+                self.model = model
+                self.device = device_id
             
-            while run_webcam and not stop_button:
-                ret, frame = cap.read()
-                if not ret:
-                    st.error("Failed to capture frame")
-                    break
+            def recv(self, frame):
+                img = frame.to_ndarray(format="bgr24")
                 
                 # Run YOLO detection
-                results = model(frame, conf=conf_threshold, device=device_id, verbose=False)
+                results = self.model(img, conf=self.conf, device=self.device, verbose=False)
                 annotated_frame = results[0].plot()
                 
-                # Convert BGR to RGB for Streamlit
-                frame_rgb = cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2RGB)
-                
-                # Display frame
-                FRAME_WINDOW.image(frame_rgb)
-            
-            cap.release()
-            st.info("Webcam stopped")
+                return av.VideoFrame.from_ndarray(annotated_frame, format="bgr24")
+        
+        webrtc_ctx = webrtc_streamer(
+            key="object-detection",
+            mode=WebRtcMode.SENDRECV,
+            rtc_configuration=rtc_configuration,
+            media_stream_constraints={
+                "video": True,
+                "audio": False
+            },
+            video_processor_factory=VideoProcessor,
+            async_processing=True,
+        )
+        
+        if webrtc_ctx.state.playing:
+            st.success("✅ Webcam active - Detection running!")
+        
+    except ImportError:
+        st.error("⚠️ streamlit-webrtc not installed")
+        st.code("pip install streamlit-webrtc aiortc", language="bash")
+        
 # Footer
 st.markdown("---")
 st.markdown("""
@@ -275,4 +290,5 @@ st.markdown("""
     <p>🃏 YOLO Card Classifier | Powered by Ultralytics YOLOv11</p>
     </div>
     """, unsafe_allow_html=True)
+
 
