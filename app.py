@@ -265,56 +265,112 @@ with tab2:
             
             
 #Tab 3: Live detection
-
-
 with tab3:
-    st.header("Live Webcam Detection")
-    try:
-        from streamlit_webrtc import webrtc_streamer, WebRtcMode, RTCConfiguration
-        import av
-        
-        rtc_configuration = RTCConfiguration(
-            {"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]}
-        )
-        
-        class VideoProcessor:
-            def __init__(self):
-                self.conf = conf_threshold
-            
-            def recv(self, frame):
-                img = frame.to_ndarray(format="bgr24")
-                
-                # Run inference
-                results = model(img, conf=self.conf, device=device_id, verbose=False)
-                annotated_frame = results[0].plot()
-                
-                return av.VideoFrame.from_ndarray(annotated_frame, format="bgr24")
-        
-        webrtc_ctx = webrtc_streamer(
-            key="card-classifier-webcam",
-            mode=WebRtcMode.SENDRECV,
-            rtc_configuration=rtc_configuration,
-            media_stream_constraints={"video": True, "audio": False},
-            async_processing=True,
-            video_processor_factory=VideoProcessor,
-        )
-        
-        if webrtc_ctx.state.playing:
-            st.info("📹 Webcam is active. Detection running in real-time.")
+    st.header("Live Webcam Detection")   
+
+    #buttons for start and stop webcam detection
+    if "cam_active_tab3" not in st.session_state:
+        st.session_state.cam_active_tab3 = False 
+
+    colA, colB = st.columns(2)  #->in column-1 start button and column-2 stop button
+    with colA:
+        if st.button("tart Camera", key="start_cam_button_tab3"):
+            st.session_state.cam_active_tab3 = True
+
+    with colB:
+        if st.button("Stop Camera", key="stop_cam_button_tab3"):
+            st.session_state.cam_active_tab3 = False
+
+    st.write("")
+
+    FRAME_WINDOW = st.image([])  #placeholder to display frames from the webcam
+
+    if st.session_state.cam_active_tab3: 
+        cap = cv2.VideoCapture(0)  #open the default camera of the current device
+
+        if not cap.isOpened():  #if camera is not found
+            st.error("Cannot access webcam. Make sure:")  #show error message
+            st.markdown("""
+            - Your webcam is connected
+            - No other application is using it
+            - You've granted camera permissions
+            - You're running this locally (not on Streamlit Cloud)
+            """) 
         else:
-            st.info("Click 'Start' to begin webcam detection")
-            
-    except ImportError:
-        st.warning("⚠️ streamlit-webrtc not installed")
-        st.info("Install it with: `pip install streamlit-webrtc`")
+            st.success(" Webcam connected!")  #if camera is found Inform user that  
+
+            #keep fetching frames when camera is running 
+            while cap.isOpened() and st.session_state.cam_active_tab3:
+                ret, frame = cap.read()  #capture frame by frame
+                if not ret:  #if frame is not captured correctly
+                    st.error("Failed to capture frame")
+                    break
+
+                #run the pretrained model for real-time object detection
+                results = model(frame, conf=conf_threshold, device=device_id, verbose=False)
+                annotated_frame = results[0].plot()  #->draw bounding boxes and labels
+
+                #convert BGR to RGB for streamlit
+                frame_rgb = cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2RGB)
+
+                #display the annotated frame in streamlit
+                FRAME_WINDOW.image(frame_rgb)
+
+            cap.release()  #release the camera after stopping
+            st.info("Webcam stopped") 
+
+
+
+
+#optional---------------------------
+# with tab3:
+#     st.header("Live Webcam Detection")
+#     try:
+#         from streamlit_webrtc import webrtc_streamer, WebRtcMode, RTCConfiguration
+#         import av
         
-        # Fallback: Simple OpenCV approach
-        st.subheader("Alternative: Local Webcam Testing")
-        st.code("""
-# Run this in terminal instead:
-python test.py
-# Then select option 3 for webcam
-        """)
+#         rtc_configuration = RTCConfiguration(
+#             {"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]}
+#         )
+        
+#         class VideoProcessor:
+#             def __init__(self):
+#                 self.conf = conf_threshold
+            
+#             def recv(self, frame):
+#                 img = frame.to_ndarray(format="bgr24")
+                
+#                 # Run inference
+#                 results = model(img, conf=self.conf, device=device_id, verbose=False)
+#                 annotated_frame = results[0].plot()
+                
+#                 return av.VideoFrame.from_ndarray(annotated_frame, format="bgr24")
+        
+#         webrtc_ctx = webrtc_streamer(
+#             key="card-classifier-webcam",
+#             mode=WebRtcMode.SENDRECV,
+#             rtc_configuration=rtc_configuration,
+#             media_stream_constraints={"video": True, "audio": False},
+#             async_processing=True,
+#             video_processor_factory=VideoProcessor,
+#         )
+        
+#         if webrtc_ctx.state.playing:
+#             st.info("📹 Webcam is active. Detection running in real-time.")
+#         else:
+#             st.info("Click 'Start' to begin webcam detection")
+            
+#     except ImportError:
+#         st.warning("⚠️ streamlit-webrtc not installed")
+#         st.info("Install it with: `pip install streamlit-webrtc`")
+        
+#         # Fallback: Simple OpenCV approach
+#         st.subheader("Alternative: Local Webcam Testing")
+#         st.code("""
+# # Run this in terminal instead:
+# python test.py
+# # Then select option 3 for webcam
+#         """)
 
 
 #footer section
@@ -324,6 +380,7 @@ st.markdown("""
     <p>🃏 YOLO Card Classifier | Powered by Ultralytics YOLOv11</p>
     </div>
     """, unsafe_allow_html=True)
+
 
 
 
