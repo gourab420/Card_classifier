@@ -11,7 +11,6 @@ import imageio
 #set page config
 st.set_page_config(
     page_title="Card Classifier",
-    page_icon="🃏",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -63,7 +62,7 @@ conf_threshold = st.sidebar.slider(  #-> make a slide bar that take confidence t
 device_id="cpu"
 
 #main tabs
-tab1,tab2,tab3= st.tabs(["📷 Image", "🎥 Video","📹 Webcam"])
+tab1,tab2,tab3= st.tabs(["Image", "Video","Webcam"])
 
 #Tab 1: single to multiple image upload + live take photo using camera
 with tab1:
@@ -72,7 +71,7 @@ with tab1:
     # =============================
     # ROW 1 → IMAGE UPLOAD SECTION
     # =============================
-    st.subheader("📤 Upload Image(s)")
+    st.subheader("Upload Image(s)")
 
     uploaded_files = st.file_uploader( #-> choose image from local drive 
         "Upload one or more images",
@@ -82,11 +81,11 @@ with tab1:
     )
 
     if uploaded_files:
-        st.info(f"📦 {len(uploaded_files)} file(s) uploaded")
+        st.info(f"{len(uploaded_files)} file(s) uploaded")
 
         #loop for all uploaded images to get access one by one
         for idx, uploaded_file in enumerate(uploaded_files):
-            st.write(f"### 🖼 Image {idx + 1}: {uploaded_file.name}")
+            st.write(f"### Image {idx + 1}: {uploaded_file.name}")
 
             image=Image.open(uploaded_file)#->store single image
             col1,col2 = st.columns(2)#-> two colum one for orginal image and another for predicted image
@@ -114,7 +113,7 @@ with tab1:
                 st.image(annotated_pil, use_column_width=True)
 
             #show detection table
-            st.subheader("📊 Detections") #-> show the value get from the images
+            st.subheader("Detections") #-> show the value get from the images
             if len(results[0].boxes) > 0:
                 det_list = []
                 for box in results[0].boxes: 
@@ -135,7 +134,7 @@ with tab1:
     st.write("")
 
     # ROW 2 → LIVE CAMERA SECTION
-    st.subheader("📸 Live Camera Detection")
+    st.subheader("Live Camera Detection")
 
     #camera session state for tab1
     if "cam_active_tab1" not in st.session_state:
@@ -144,11 +143,11 @@ with tab1:
     #start/stop buttons for camera
     colA,colB = st.columns(2) #-> in column-1 start button and column-2 stop button
     with colA:
-        if st.button("▶️ Start Camera", key="start_cam_button_tab1"):
+        if st.button("Start Camera", key="start_cam_button_tab1"):
             st.session_state.cam_active_tab1 = True
 
     with colB:
-        if st.button("⛔ Stop Camera", key="stop_cam_button_tab1"):
+        if st.button("Stop Camera", key="stop_cam_button_tab1"):
             st.session_state.cam_active_tab1 = False
 
     st.write("")
@@ -245,7 +244,7 @@ with tab2:
                 pixelformat='yuv420p'
             )
             #display the predicted video
-            st.subheader("🎬 Processed Video")
+            st.subheader("Processed Video")
             col1, col2, col3 = st.columns([1, 2, 1])
  
             with col2:
@@ -266,152 +265,56 @@ with tab2:
             
             
 #Tab 3: Live detection
-with tab3:
-    st.header("🎥 Live Webcam Detection")
 
+
+with tab3:
+    st.header("Live Webcam Detection")
     try:
         from streamlit_webrtc import webrtc_streamer, WebRtcMode, RTCConfiguration
-        import av, time
-
-        st.info("Webcam will run using WebRTC. If connection fails, try again or check TURN settings.")
-
-        # -----------------------------------------------
-        # ✅ Improved ICE (STUN + TURN Fallback)
-        # -----------------------------------------------
+        import av
+        
         rtc_configuration = RTCConfiguration(
-            {
-                "iceServers": [
-                    {"urls": ["stun:stun.l.google.com:19302"]},
-                    {
-                        "urls": ["turn:anyfirewall.com:443?transport=tcp"],
-                        "username": "webrtc",
-                        "credential": "webrtc"
-                    },
-                ]
-            }
+            {"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]}
         )
-
-        # -----------------------------------------------
-        # 🎯 YOLO Video Processor with FPS Counter
-        # -----------------------------------------------
+        
         class VideoProcessor:
             def __init__(self):
                 self.conf = conf_threshold
-                self.last_time = time.time()
-                self.fps = 0
-
+            
             def recv(self, frame):
                 img = frame.to_ndarray(format="bgr24")
-
-                # -------------------------------
-                # YOLO Inference
-                # -------------------------------
+                
+                # Run inference
                 results = model(img, conf=self.conf, device=device_id, verbose=False)
                 annotated_frame = results[0].plot()
-
-                # -------------------------------
-                # FPS Calculation
-                # -------------------------------
-                now = time.time()
-                self.fps = 1 / (now - self.last_time)
-                self.last_time = now
-
-                # Display FPS on frame
-                cv2.putText(
-                    annotated_frame,
-                    f"FPS: {self.fps:.1f}",
-                    (10, 35),
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    1,
-                    (0, 255, 0),
-                    2,
-                )
-
+                
                 return av.VideoFrame.from_ndarray(annotated_frame, format="bgr24")
-
-        # -----------------------------------------------
-        # 🚀 Create WebRTC Streamer
-        # -----------------------------------------------
+        
         webrtc_ctx = webrtc_streamer(
-            key="yolo-webcam-stream",
+            key="card-classifier-webcam",
             mode=WebRtcMode.SENDRECV,
             rtc_configuration=rtc_configuration,
             media_stream_constraints={"video": True, "audio": False},
             async_processing=True,
             video_processor_factory=VideoProcessor,
         )
-
-        # -----------------------------------------------
-        # 📌 Live Status Indicator
-        # -----------------------------------------------
+        
         if webrtc_ctx.state.playing:
-            st.success("🟢 Webcam active — YOLO detection running.")
+            st.info("📹 Webcam is active. Detection running in real-time.")
         else:
-            st.info("Click **Start** above to begin webcam detection.")
-
-    except Exception as e:
-        st.error("⚠️ WebRTC module not available or failed to load.")
-        st.code(str(e))
-
-        # Local fallback
-        st.subheader("Local Webcam Option")
-
-
-
-
-
-
-
-
-# with tab3:
-#     st.header("Live Webcam Detection")
-    
-#     try:
-#         from streamlit_webrtc import webrtc_streamer, WebRtcMode, RTCConfiguration
-#         import av
-        
-#         rtc_configuration = RTCConfiguration(
-#             {"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]}
-#         )
-        
-#         class VideoProcessor:
-#             def __init__(self):
-#                 self.conf = conf_threshold
+            st.info("Click 'Start' to begin webcam detection")
             
-#             def recv(self, frame):
-#                 img = frame.to_ndarray(format="bgr24")
-                
-#                 # Run inference
-#                 results = model(img, conf=self.conf, device=device_id, verbose=False)
-#                 annotated_frame = results[0].plot()
-                
-#                 return av.VideoFrame.from_ndarray(annotated_frame, format="bgr24")
+    except ImportError:
+        st.warning("⚠️ streamlit-webrtc not installed")
+        st.info("Install it with: `pip install streamlit-webrtc`")
         
-#         webrtc_ctx = webrtc_streamer(
-#             key="card-classifier-webcam",
-#             mode=WebRtcMode.SENDRECV,
-#             rtc_configuration=rtc_configuration,
-#             media_stream_constraints={"video": True, "audio": False},
-#             async_processing=True,
-#             video_processor_factory=VideoProcessor,
-#         )
-        
-#         if webrtc_ctx.state.playing:
-#             st.info("📹 Webcam is active. Detection running in real-time.")
-#         else:
-#             st.info("Click 'Start' to begin webcam detection")
-            
-#     except ImportError:
-#         st.warning("⚠️ streamlit-webrtc not installed")
-#         st.info("Install it with: `pip install streamlit-webrtc`")
-        
-#         # Fallback: Simple OpenCV approach
-#         st.subheader("Alternative: Local Webcam Testing")
-#         st.code("""
-# # Run this in terminal instead:
-# python test.py
-# # Then select option 3 for webcam
-#         """)
+        # Fallback: Simple OpenCV approach
+        st.subheader("Alternative: Local Webcam Testing")
+        st.code("""
+# Run this in terminal instead:
+python test.py
+# Then select option 3 for webcam
+        """)
 
 
 #footer section
@@ -421,6 +324,7 @@ st.markdown("""
     <p>🃏 YOLO Card Classifier | Powered by Ultralytics YOLOv11</p>
     </div>
     """, unsafe_allow_html=True)
+
 
 
 
