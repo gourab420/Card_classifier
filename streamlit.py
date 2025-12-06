@@ -63,7 +63,7 @@ conf_threshold = st.sidebar.slider(  #-> make a slide bar that take confidence t
 device_id="cpu"
 
 #main tabs
-tab1,tab2= st.tabs(["📷 Image", "🎥 Video"])
+tab1,tab2,tab3= st.tabs(["📷 Image", "🎥 Video","📹 Webcam"])
 
 #Tab 1: single to multiple image upload + live take photo using camera
 with tab1:
@@ -137,24 +137,24 @@ with tab1:
     # ROW 2 → LIVE CAMERA SECTION
     st.subheader("📸 Live Camera Detection")
 
-    #camera session state
-    if "cam_active" not in st.session_state:
-        st.session_state.cam_active = False
+    #camera session state for tab1
+    if "cam_active_tab1" not in st.session_state:
+        st.session_state.cam_active_tab1 = False
 
     #start/stop buttons for camera
     colA,colB = st.columns(2) #-> in column-1 start button and column-2 stop button
     with colA:
         if st.button("▶️ Start Camera", key="start_cam_button_tab1"):
-            st.session_state.cam_active = True
+            st.session_state.cam_active_tab1 = True
 
     with colB:
         if st.button("⛔ Stop Camera", key="stop_cam_button_tab1"):
-            st.session_state.cam_active = False
+            st.session_state.cam_active_tab1 = False
 
     st.write("")
 
     #show camera if active or already granted the permission
-    if st.session_state.cam_active:
+    if st.session_state.cam_active_tab1:
         camera_photo = st.camera_input("Take a photo", key="live_cam_input_tab1") #-> take photo from the user
 
         if camera_photo is not None:
@@ -264,16 +264,68 @@ with tab2:
             #clean up
             os.remove(temp_input.name)
             
-   
-# Footer
+            
+#Tab 3: Live detection
+with tab3:
+    st.header("Live Webcam Detection")   
+    st.warning("⚠️ **Note:** Direct webcam access only works when running locally, not on Cloud.")
+
+    #buttons for start and stop webcam detection
+    if "cam_active_tab3" not in st.session_state:
+        st.session_state.cam_active_tab3 = False 
+
+    colA, colB = st.columns(2)  #->in column-1 start button and column-2 stop button
+    with colA:
+        if st.button("▶️ Start Camera", key="start_cam_button_tab3"):
+            st.session_state.cam_active_tab3 = True
+
+    with colB:
+        if st.button("⛔ Stop Camera", key="stop_cam_button_tab3"):
+            st.session_state.cam_active_tab3 = False
+
+    st.write("")
+
+    FRAME_WINDOW = st.image([])  #placeholder to display frames from the webcam
+
+    if st.session_state.cam_active_tab3: 
+        cap = cv2.VideoCapture(0)  #open the default camera of the current device
+
+        if not cap.isOpened():  #if camera is not found
+            st.error("❌ Cannot access webcam. Make sure:")  #show error message
+            st.markdown("""
+            - Your webcam is connected
+            - No other application is using it
+            - You've granted camera permissions
+            - You're running this locally (not on Streamlit Cloud)
+            """) 
+        else:
+            st.success("✅ Webcam connected!")  #if camera is found Inform user that  
+
+            #keep fetching frames when camera is running 
+            while cap.isOpened() and st.session_state.cam_active_tab3:
+                ret, frame = cap.read()  #capture frame by frame
+                if not ret:  #if frame is not captured correctly
+                    st.error("Failed to capture frame")
+                    break
+
+                #run the pretrained model for real-time object detection
+                results = model(frame, conf=conf_threshold, device=device_id, verbose=False)
+                annotated_frame = results[0].plot()  #->draw bounding boxes and labels
+
+                #convert BGR to RGB for streamlit
+                frame_rgb = cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2RGB)
+
+                #display the annotated frame in streamlit
+                FRAME_WINDOW.image(frame_rgb)
+
+            cap.release()  #release the camera after stopping
+            st.info("Webcam stopped") 
+
+
+#footer section
 st.markdown("---")
 st.markdown("""
     <div style='text-align: center'>
     <p>🃏 YOLO Card Classifier | Powered by Ultralytics YOLOv11</p>
     </div>
     """, unsafe_allow_html=True)
-
-
-
-
-
