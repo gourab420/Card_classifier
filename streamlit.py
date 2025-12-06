@@ -355,11 +355,7 @@ with tab3:
 
         # Local fallback
         st.subheader("Local Webcam Option")
-        st.markdown("""
-Run locally instead:
 
-```bash
-python test_webcam.py
 
 
 
@@ -425,6 +421,7 @@ st.markdown("""
     <p>🃏 YOLO Card Classifier | Powered by Ultralytics YOLOv11</p>
     </div>
     """, unsafe_allow_html=True)
+
 
 
 
