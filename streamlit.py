@@ -266,56 +266,118 @@ with tab2:
             
             
 #Tab 3: Live detection
-# Tab 4: Webcam
 with tab3:
     st.header("Live Webcam Detection")
-    
+
     try:
         from streamlit_webrtc import webrtc_streamer, WebRtcMode, RTCConfiguration
         import av
-        
+
+        # WebRTC server configuration (required for cloud deployment)
         rtc_configuration = RTCConfiguration(
             {"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]}
         )
-        
+
+        # Video processing class (runs on every video frame)
         class VideoProcessor:
             def __init__(self):
-                self.conf = conf_threshold
-            
+                self.conf = conf_threshold  # store confidence threshold
+
             def recv(self, frame):
-                img = frame.to_ndarray(format="bgr24")
-                
-                # Run inference
+                img = frame.to_ndarray(format="bgr24")  # convert frame to numpy BGR
+
+                # Run YOLO model inference
                 results = model(img, conf=self.conf, device=device_id, verbose=False)
-                annotated_frame = results[0].plot()
-                
+                annotated_frame = results[0].plot()  # draw bounding boxes
+
+                # return frame back to browser
                 return av.VideoFrame.from_ndarray(annotated_frame, format="bgr24")
-        
+
+        # WebRTC streamer UI
         webrtc_ctx = webrtc_streamer(
-            key="card-classifier-webcam",
-            mode=WebRtcMode.SENDRECV,
-            rtc_configuration=rtc_configuration,
+            key="card-classifier-webcam",              # unique stream key
+            mode=WebRtcMode.SENDRECV,                  # send & receive video
+            rtc_configuration=rtc_configuration,       # STUN server for connection
             media_stream_constraints={"video": True, "audio": False},
-            async_processing=True,
-            video_processor_factory=VideoProcessor,
+            async_processing=True,                     # process frames asynchronously
+            video_processor_factory=VideoProcessor,     # attach processor
         )
-        
-        if webrtc_ctx.state.playing:
+
+        # Display webcam status to user
+        if webrtc_ctx and webrtc_ctx.state.playing:
             st.info("📹 Webcam is active. Detection running in real-time.")
         else:
             st.info("Click 'Start' to begin webcam detection")
-            
+
     except ImportError:
         st.warning("⚠️ streamlit-webrtc not installed")
         st.info("Install it with: `pip install streamlit-webrtc`")
-        
-        # Fallback: Simple OpenCV approach
+
+        # Fallback: Simple OpenCV approach (only works locally)
         st.subheader("Alternative: Local Webcam Testing")
         st.code("""
 # Run this in terminal instead:
 python test.py
 # Then select option 3 for webcam
         """)
+
+
+
+
+
+
+
+
+
+# with tab3:
+#     st.header("Live Webcam Detection")
+    
+#     try:
+#         from streamlit_webrtc import webrtc_streamer, WebRtcMode, RTCConfiguration
+#         import av
+        
+#         rtc_configuration = RTCConfiguration(
+#             {"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]}
+#         )
+        
+#         class VideoProcessor:
+#             def __init__(self):
+#                 self.conf = conf_threshold
+            
+#             def recv(self, frame):
+#                 img = frame.to_ndarray(format="bgr24")
+                
+#                 # Run inference
+#                 results = model(img, conf=self.conf, device=device_id, verbose=False)
+#                 annotated_frame = results[0].plot()
+                
+#                 return av.VideoFrame.from_ndarray(annotated_frame, format="bgr24")
+        
+#         webrtc_ctx = webrtc_streamer(
+#             key="card-classifier-webcam",
+#             mode=WebRtcMode.SENDRECV,
+#             rtc_configuration=rtc_configuration,
+#             media_stream_constraints={"video": True, "audio": False},
+#             async_processing=True,
+#             video_processor_factory=VideoProcessor,
+#         )
+        
+#         if webrtc_ctx.state.playing:
+#             st.info("📹 Webcam is active. Detection running in real-time.")
+#         else:
+#             st.info("Click 'Start' to begin webcam detection")
+            
+#     except ImportError:
+#         st.warning("⚠️ streamlit-webrtc not installed")
+#         st.info("Install it with: `pip install streamlit-webrtc`")
+        
+#         # Fallback: Simple OpenCV approach
+#         st.subheader("Alternative: Local Webcam Testing")
+#         st.code("""
+# # Run this in terminal instead:
+# python test.py
+# # Then select option 3 for webcam
+#         """)
 
 
 #footer section
@@ -325,4 +387,5 @@ st.markdown("""
     <p>🃏 YOLO Card Classifier | Powered by Ultralytics YOLOv11</p>
     </div>
     """, unsafe_allow_html=True)
+
 
